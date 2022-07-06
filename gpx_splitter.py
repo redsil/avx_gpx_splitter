@@ -7,6 +7,7 @@ import gpxpy
 import gpxpy.gpx
 import geopy.distance
 import regex
+import copy
 from io import  StringIO
 import datetime
 
@@ -19,19 +20,16 @@ def meters_to_feet(meters):
 def filter_airports(airports,gpx): # lat1,lon1,lat2,lon2):
     # FIMXME - handling for wrap around lon/lat
     filtered_airports = []
-    track_bounds = []
-    
-    for track in (gpx.tracks):
-        track_bounds.append(track.get_bounds())
+    bounds = gpx.get_bounds()
+        
 
     for airport in airports:
         lat = float(airport['latitude_deg'])
         lon = float(airport['longitude_deg'])
 
         track_airports = []
-        for bounds in track_bounds:
-            if (lat > bounds.min_latitude and lat < bounds.max_latitude and lon > bounds.min_longitude and lon < bounds.max_longitude):
-                track_airports.append(airport)
+        if (lat > bounds.min_latitude and lat < bounds.max_latitude and lon > bounds.min_longitude and lon < bounds.max_longitude):
+            track_airports.append(airport)
 
         # append new airports to filtered list
         [filtered_airports.append(airport) for airport in track_airports if (airport['id'] not in [airport['id'] for airport in filtered_airports])]
@@ -81,7 +79,7 @@ def load_gpx(text):
 
 
 # Given the gpx and list of airports, find where aiports were itermediate destinations and break into segments
-def split_segments(gpx,airports):
+def split_into_segments(gpx,airports):
     split_points = []
     for track_no,track in enumerate(gpx.tracks):
         for segment_no,segment in enumerate(track.segments):
@@ -106,6 +104,85 @@ def split_segments(gpx,airports):
     for split in reversed(split_points):
         gpx.tracks[split[0]].split(split[1],split[2]) 
 
+# Put each segment into its own track
+def split_into_tracks(gpx,airports): 
+    segment_list = [segment for track in gpx.tracks for segment in track.segments]
+
+    new_gpx = copy.copy(gpx)
+    
+    # template track
+    template_track = copy.copy(gpx.tracks[0])
+    template_track.segments = []
+    new_gpx.tracks = []
+
+    for segment in segment_list:
+        new_track = copy.copy(template_track)
+        new_track.segments = []
+
+        new_track.segments.append(segment)
+        new_gpx.tracks.append(new_track)
+
+    return(new_gpx)
+    
+
+def delete_track(gpx,track_no):
+    del gpx.tracks[track_no]                            
+    
+
+def set_track_name(gpx,track_no,name):
+    if (track_no >= len(gpx.tracks)):
+        return(False)
+
+    gpx.tracks[track_no].name = name
+    return(True)
+
+def set_track_desc(gpx,track_no,desc):
+    if (track_no >= len(gpx.tracks)):
+        return(False)
+
+    gpx.tracks[track_no].description = desc
+    return(True)
+
+
+def get_airport_info(airports,ident):
+    matches = [airport for airport in airports if (airport['ident'] == ident)]
+    return(matches[0])
+
+def segment_info(segment,airports):
+    info = {}
+#    for track_no,track in enumerate(gpx_data.tracks):
+#        for segment_no,segment in enumerate(track.segments):
+    if (len(segment.points)):
+        start = segment.points[0]
+        end = segment.points[-1]
+        start_airport = closest_airport(airports,start.latitude,start.longitude,meters_to_feet(start.elevation))
+        end_airport = closest_airport(airports,end.latitude,end.longitude,meters_to_feet(end.elevation))
+        elevations = segment.get_elevation_extremes()
+
+        unknown_airport = {'ident':'NONE','name':"",'municipality':"",'iso_region':""}
+        if (not start_airport):
+            start_airport = unknown_airport
+        if (not end_airport):
+            end_airport = unknown_airport
+
+        info = {'depart': start_airport['ident'],
+                'arrive':end_airport['ident'],
+                'time': start.time,
+                'duration':datetime.timedelta(seconds=segment.get_duration()),
+                'distance': int(meters_to_nm(segment.length_2d())),
+                'max_alt': int(meters_to_feet(elevations.maximum))
+        }
+        info['description'] = f"""depart:   {info['depart']} {start_airport['name']}, {start_airport['municipality']} {start_airport['iso_region']}
+arrive:   {info['arrive']} {end_airport['name']}, {end_airport['municipality']} {end_airport['iso_region']}
+date:     {info['time']}
+duration: {info['duration']}
+distance: {info['distance']}nm 
+max alt:  {info['max_alt']}ft
+"""
+
+    return(info)
+    
+
 ######################################################################################
 
 gpx_file = open(sys.argv[1],'r')
@@ -116,24 +193,23 @@ airports = filter_airports(load_airports("airports.csv"),gpx_data)
 
 # Split any segments if there is a landing
 print("Finding splits...")
-split_segments(gpx_data,airports)
+split_into_segments(gpx_data,airports)
 
-print("Determining aiport data for segements...")
-for track_no,track in enumerate(gpx_data.tracks):
-    
-    for segment_no,segment in enumerate(track.segments):
-        if (len(segment.points)):
-            start = segment.points[0]
-            end = segment.points[-1]
-            start_airport = closest_airport(airports,start.latitude,start.longitude,meters_to_feet(start.elevation))
-            end_airport = closest_airport(airports,end.latitude,end.longitude,meters_to_feet(end.elevation))
-            elevations = segment.get_elevation_extremes()
+print("Getting segment info")
+info_list = [info for track in gpx_data.tracks for info in [segment_info(segment,airports) for segment in track.segments]]
+for info in info_list:
+    print(f"{info['depart']} {info['arrive']} {info['time']}  {info['duration']} {info['distance']}nm {info['max_alt']}ft")
 
-            if (not start_airport):
-                start_airport = {'ident':'NONE'}
-            if (not end_airport):
-                end_airport = {'ident':'NONE'}
+new_gpx = split_into_tracks(gpx_data,None)
 
-            print(f"{start_airport['ident']} {end_airport['ident']} {start.time}  {datetime.timedelta(seconds=segment.get_duration())} {int(meters_to_nm(segment.length_2d()))}nm {int(meters_to_feet(elevations.maximum))}ft")
+print("Set track names")
+
+for index,info in enumerate(info_list):
+    set_track_name(new_gpx,index,f"{info_list[index]['depart']} {info_list[index]['arrive']}")
+    set_track_desc(new_gpx,index,info_list[index]['description'])
+
+
+#delete_track(new_gpx,2)
+print(new_gpx.to_xml())
 
 
