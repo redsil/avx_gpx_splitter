@@ -1,5 +1,4 @@
 #!/usr/bin/python3
-from pdb import lasti2lineno
 import sys
 import os
 import csv
@@ -10,6 +9,8 @@ import regex
 import copy
 from io import  StringIO
 import datetime
+
+from simplejson import JSONEncoder
 
 def meters_to_nm(meters):
     return(meters/1852 )
@@ -105,7 +106,7 @@ def split_into_segments(gpx,airports):
         gpx.tracks[split[0]].split(split[1],split[2]) 
 
 # Put each segment into its own track
-def split_into_tracks(gpx,airports): 
+def split_into_tracks(gpx): 
     segment_list = [segment for track in gpx.tracks for segment in track.segments]
 
     new_gpx = copy.copy(gpx)
@@ -167,8 +168,8 @@ def segment_info(segment,airports):
 
         info = {'depart': start_airport['ident'],
                 'arrive':end_airport['ident'],
-                'time': start.time,
-                'duration':datetime.timedelta(seconds=segment.get_duration()),
+                'time': str(start.time),
+                'duration':str(datetime.timedelta(seconds=segment.get_duration())),
                 'distance': int(meters_to_nm(segment.length_2d())),
                 'max_alt': int(meters_to_feet(elevations.maximum))
         }
@@ -182,34 +183,51 @@ max alt:  {info['max_alt']}ft
 
     return(info)
     
+def xml_get_split_gpx(gpx_data):
+    airports = filter_airports(load_airports("airports.csv"),gpx_data)
+    split_into_segments(gpx_data,airports)
+    new_gpx = split_into_tracks(gpx_data)
+    return(new_gpx)
+
+def json_get_gpx_info(gpx_data):
+    airports = filter_airports(load_airports("airports.csv"),gpx_data)
+    split_into_segments(gpx_data,airports)
+    info_list = [info for track in gpx_data.tracks for info in [segment_info(segment,airports) for segment in track.segments]]
+    return(JSONEncoder().encode(info_list))
+
+    
+
 
 ######################################################################################
+# Todo - add arg parsing
+def run():
+    gpx_file = open(sys.argv[1],'r')
+    gpx_string = gpx_file.read()
+    gpx_data = load_gpx(gpx_string)
 
-gpx_file = open(sys.argv[1],'r')
-gpx_string = gpx_file.read()
-gpx_data = load_gpx(gpx_string)
+    airports = filter_airports(load_airports("airports.csv"),gpx_data)
 
-airports = filter_airports(load_airports("airports.csv"),gpx_data)
+    # Split any segments if there is a landing
+    print("Finding splits...")
+    split_into_segments(gpx_data,airports)
 
-# Split any segments if there is a landing
-print("Finding splits...")
-split_into_segments(gpx_data,airports)
+    print("Getting segment info")
+    info_list = [info for track in gpx_data.tracks for info in [segment_info(segment,airports) for segment in track.segments]]
+    for info in info_list:
+        print(f"{info['depart']} {info['arrive']} {info['time']}  {info['duration']} {info['distance']}nm {info['max_alt']}ft")
 
-print("Getting segment info")
-info_list = [info for track in gpx_data.tracks for info in [segment_info(segment,airports) for segment in track.segments]]
-for info in info_list:
-    print(f"{info['depart']} {info['arrive']} {info['time']}  {info['duration']} {info['distance']}nm {info['max_alt']}ft")
+    new_gpx = split_into_tracks(gpx_data)
 
-new_gpx = split_into_tracks(gpx_data,None)
+    print("Set track names")
 
-print("Set track names")
-
-for index,info in enumerate(info_list):
-    set_track_name(new_gpx,index,f"{info_list[index]['depart']} {info_list[index]['arrive']}")
-    set_track_desc(new_gpx,index,info_list[index]['description'])
-
-
-#delete_track(new_gpx,2)
-print(new_gpx.to_xml())
+    for index,info in enumerate(info_list):
+        set_track_name(new_gpx,index,f"{info_list[index]['depart']} {info_list[index]['arrive']}")
+        set_track_desc(new_gpx,index,info_list[index]['description'])
 
 
+    #delete_track(new_gpx,2)
+    print(new_gpx.to_xml())
+
+
+if (__name__ == "__main__"):
+    run()
