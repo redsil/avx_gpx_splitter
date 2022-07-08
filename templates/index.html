@@ -1,10 +1,11 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
     <meta charset="UTF-8">
     <title>GPXParser | OpenSource GPX format JavaScript parser</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="./GPXParser.js"></script>
+	<link rel="stylesheet"	href=" https://cdn.jsdelivr.net/npm/bootswatch@5.1.3/dist/lux/bootstrap.min.css ">
+	<script src="./GPXParser.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <script>
@@ -15,11 +16,23 @@
 		  return(d*0.000539957);
       }
 
+	  function clear_table() {
+		var segments = $("#segments");
+		var table = segments.find("#segment-table");
+		table.find("tr#seg_row").remove();
+	  }
+
 	  function load_gpx() {
 		var input = document.getElementById("customFile");
 	  	var fr=new FileReader();
 
+		var segments = $("#segments");
+	  	segments.removeClass("collapse");
+		clear_table();
+		segments.find(".spinner-border").removeClass("collapse");
 		
+		var	segdiv = $("#seg_div");
+
 		fr.readAsText(input.files[0]);
 		var gpx_data;
 	  	fr.onload=function(){
@@ -32,10 +45,10 @@
 			  })
 			  .then(res => res.json())
 			  .then(d => {
-				render_segments(d)
+				render_segments(d);
+				segments.find(".spinner-border").addClass("collapse");
 					})
 		}
-	  
       }
 
       function get_previous_point(gpx,time) {
@@ -47,52 +60,75 @@
 	  	var table = segments.find("#segment-table");
 
 		var index = 0;
-		table.find("[name='col']").remove();
 		gpx_info.forEach(function(segment) {
-	      var row = $("<tr></tr");
-	      row.append($('<td name="col"></td>').text(segment.time));
-	      row.append($('<td name="col"></td>').text(segment.depart));
-	      row.append($('<td name="col"></td>').text(segment.arrive));
-	      row.append($('<td name="col"></td>').text(segment.distance));
-	      row.append($('<td name="col"></td>').text(segment.duration));
-	      row.append($('<td name="col"></td>').text(segment.max_alt));
-		  var text = $('<textarea id="description" name="description" rows="3" cols="80"></textarea>').text(segment.description);
-		  row.append($('<td name="col"></td>').append(text));
-	      table.append(row);
-		  index++;
+			var row = $('<tr id="seg_row"></tr>');
+			row.append($(`<td name="col"><input class="form-check-input" type="checkbox" id="check${index}" name="option${index}" value="true" checked></td>`));
+			row.append($('<td name="col"></td>').text(segment.time));
+			row.append($('<td name="col"></td>').text(segment.depart));
+			row.append($('<td name="col"></td>').text(segment.arrive));
+			row.append($('<td name="col"></td>').text(segment.distance));
+			row.append($('<td name="col"></td>').text(segment.duration));
+			row.append($('<td name="col"></td>').text(segment.max_alt));
+			var text = $(`<textarea class="form-control" id="description_${index}" name="description" rows="3" cols="80"></textarea>`).text(segment.description);
+			row.append($('<td name="col id="seg_desc"></td>').append(text));
+			table.append(row);
+		  	index++;
 		});
-	  
-	  	segments.removeClass("collapse");
+	
 	  
       }
     </script>
   </head>
   <body>
-    <section class="panel-blue demo" id="main">
-      <h1>Start the demo???????</h1>
-      <div class="container mt-5">
+    <nav class="navbar navbar-expand-lg navbar-dark border border-dark bg-dark">
+		<div class="collapse navbar-collapse" id="navbarTogglerDemo03">
+			<ul class="navbar-nav ms-auto me-sm-2 mt-2 mt-lg-0">
+			  <li class="nav-item active me-3">
+				<h1 class="nav-link">Aviation GPX splitter/anaylzer</h1>
+			  </li>
+			</ul>
+  
+		  </div>
+		<div class="container">
+		  <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+			data-bs-target="#navbarTogglerDemo03"
+			aria-controls="navbarTogglerDemo03" aria-expanded="false"
+			aria-label="Toggle navigation">
+			<span class="navbar-toggler-icon"></span>
+		  </button>
+		</div>
+	  </nav>
+
+	<section class="p-5 mb-4 bg-light rounded-3" id="main">
+      <div class="container-fluid py-4">
 		<label class="form-label" for="customFile">GPX file</label>
 		<input type="file" class="form-control" id="customFile" />
-		<input type="button" class="form-control" id="submit" value="Submit" onclick="load_gpx()" />
+		<input type="button" class="btn btn-primary btn-lg form-control" id="submit" value="LOAD" onclick="load_gpx()" />
       </div>
     </section>
-    <section class="panel-blue demo collapse" id="segments">
-      <h1>GPS segments</h1>
-      <div class="container mt-5">
-	<table class="table" id="segment-table">
-	  <thead>
-	    <tr>
-	      <th>Date</th>
-	      <th>Origin</th>
-	      <th>Destination</th>
-	      <th>Distance</th>
-	      <th>Time</th>
-	      <th>Altitude</th>
-	      <th>Track Description</th>
-	    </tr>
-	</thead>
-	</table>
-      </div>
+	<section class="p-5 mb-4 bg-light rounded-3" id="main">
+		<div class="container py-4" id="segments">
+	      	<h1 id="seg_header" class="text-center">GPS segments</h1>
+			<div class="d-flex justify-content-center">
+				<div class="spinner-border collapse" role="status">
+					<span class="visually-hidden">Loading...</span>
+				</div>
+			</div>
+			<table class="table" id="segment-table">
+	  			<thead>
+				    <tr>
+						<th>Export</th>
+						<th>Date</th>
+						<th>Origin</th>
+						<th>Destination</th>
+						<th>Distance</th>
+						<th>Time</th>
+						<th>Altitude</th>
+						<th>Track Description</th>
+	    			</tr>
+				</thead>
+			</table>
+		</div>
     </section>
   </body>
 </html>
