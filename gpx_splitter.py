@@ -13,10 +13,10 @@ import datetime
 from simplejson import JSONEncoder
 
 def meters_to_nm(meters):
-    return(meters/1852 )
+    return meters/1852 
 
 def meters_to_feet(meters):
-    return(meters * 3.28084 )
+    return meters * 3.28084 
 
 def filter_airports(airports,gpx): # lat1,lon1,lat2,lon2):
     # FIMXME - handling for wrap around lon/lat
@@ -36,7 +36,7 @@ def filter_airports(airports,gpx): # lat1,lon1,lat2,lon2):
         [filtered_airports.append(airport) for airport in track_airports if (airport['id'] not in [airport['id'] for airport in filtered_airports])]
 
             
-    return(filtered_airports)
+    return filtered_airports
     
 
 def load_airports(filename):
@@ -50,7 +50,7 @@ def load_airports(filename):
                 if (col == "id"): id = row[col]
                 airport[col] = row[col]
             airports.append(airport)
-    return(airports)
+    return airports
 
 
 def closest_airport(airports,lat,lon,alt=None):
@@ -71,12 +71,12 @@ def closest_airport(airports,lat,lon,alt=None):
                         if (dist < 5 and (not closest or dist < closest_dist)):
                             closest = airport
                             closest_dist = dist
-    return(closest)
+    return closest
 
 def load_gpx(text):
     gpx_stream = StringIO(text)
     gpx_data = gpxpy.parse(gpx_stream)
-    return(gpx_data)
+    return gpx_data
 
 
 # Given the gpx and list of airports, find where aiports were itermediate destinations and break into segments
@@ -123,31 +123,31 @@ def split_into_tracks(gpx):
         new_track.segments.append(segment)
         new_gpx.tracks.append(new_track)
 
-    return(new_gpx)
+    return new_gpx
     
 
 def delete_track(gpx,track_no):
+    print(f"DEBUG deleting track {track_no} of {len(gpx.tracks)}")
     del gpx.tracks[track_no]                            
-    
 
 def set_track_name(gpx,track_no,name):
     if (track_no >= len(gpx.tracks)):
-        return(False)
+        return False
 
     gpx.tracks[track_no].name = name
-    return(True)
+    return True
 
 def set_track_desc(gpx,track_no,desc):
     if (track_no >= len(gpx.tracks)):
-        return(False)
+        return False
 
     gpx.tracks[track_no].description = desc
-    return(True)
+    return True
 
 
 def get_airport_info(airports,ident):
     matches = [airport for airport in airports if (airport['ident'] == ident)]
-    return(matches[0])
+    return matches[0]
 
 def segment_info(segment,airports):
     info = {}
@@ -181,19 +181,37 @@ distance: {info['distance']}nm
 max alt:  {info['max_alt']}ft
 """
 
-    return(info)
+    return info
     
-def xml_get_split_gpx(gpx_data):
+# Attributes is list of dicts (by track) where dict has optional fields name and description 
+# An attribute index that is None means to remove that track from the generated gpx
+def xml_get_split_gpx(gpx_data,attributes):
+
     airports = filter_airports(load_airports("airports.csv"),gpx_data)
     split_into_segments(gpx_data,airports)
     new_gpx = split_into_tracks(gpx_data)
-    return(new_gpx)
+    print(f"DEBUG {attributes}")
+
+    # Update names and descriptions
+    for i,att in enumerate(attributes):
+        if ("name" in att):
+            set_track_name(new_gpx,i,att['name'])
+
+            if ("description" in att):
+                set_track_desc(new_gpx,i,att['description'])
+
+    for i,att in reversed(list(enumerate(attributes))):
+        if (not "name" in att):
+            # Remove tracks not specified                
+            delete_track(new_gpx,i)
+    
+    return new_gpx.to_xml()
 
 def json_get_gpx_info(gpx_data):
     airports = filter_airports(load_airports("airports.csv"),gpx_data)
     split_into_segments(gpx_data,airports)
     info_list = [info for track in gpx_data.tracks for info in [segment_info(segment,airports) for segment in track.segments]]
-    return(JSONEncoder().encode(info_list))
+    return JSONEncoder().encode({'xml':gpx_data.to_xml(),'info': info_list})
 
     
 

@@ -5,78 +5,120 @@
     <title>GPXParser | OpenSource GPX format JavaScript parser</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
 	<link rel="stylesheet"	href=" https://cdn.jsdelivr.net/npm/bootswatch@5.1.3/dist/lux/bootstrap.min.css ">
-	<script src="./GPXParser.js"></script>
+//	<script src="./GPXParser.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <script>
-      function meters2feet(d) {
 
-      }
-      function meters2nm(d) {
-		  return(d*0.000539957);
-      }
+		var gpx_xml = "";
 
-	  function clear_table() {
-		var segments = $("#segments");
-		var table = segments.find("#segment-table");
-		table.find("tr#seg_row").remove();
-	  }
+		function save_gpx(filename,gpx) {
+			const blob = new Blob([gpx], {type: 'text/xml'});
+			if(window.navigator.msSaveOrOpenBlob) {
+				window.navigator.msSaveBlob(blob, filename);
+			}
+			else{
+				const elem = window.document.createElement('a');
+				elem.href = window.URL.createObjectURL(blob);
+				elem.download = filename;        
+				document.body.appendChild(elem);
+				elem.click();        
+				document.body.removeChild(elem);
+				window.URL.revokeObjectURL(elem.href)
+			}
+		}
 
-	  function load_gpx() {
-		var input = document.getElementById("customFile");
-	  	var fr=new FileReader();
 
-		var segments = $("#segments");
-	  	segments.removeClass("collapse");
-		clear_table();
-		segments.find(".spinner-border").removeClass("collapse");
-		
-		var	segdiv = $("#seg_div");
+		function meters2feet(d) {
+			return(d*3.28084);
+		}
+		function meters2nm(d) {
+			return(d*0.000539957);
+		}
 
-		fr.readAsText(input.files[0]);
-		var gpx_data;
-	  	fr.onload=function(){
+		function clear_table() {
+			$("tr#seg_row").remove();
+		}
+
+		function process_gpx() {
+			// setup attributes object
+			var attr = [];
+			$("tr#seg_row").each(function () {
+				if ($(this).find(".seg_sel").prop("checked")) {
+					attr.push({	'name': $(this).find("#depart").text() + "-" + $(this).find("#arrive").text(),
+												'description': $(this).find("#description").text() });
+				}
+				else {
+					attr.push({});
+				}
+			});
+			console.log(attr);
 			fetch('/process', {
 				method: 'POST',
-				body: JSON.stringify({ 'gpx': fr.result }),
+				body: JSON.stringify({ 'gpx': gpx_xml, 'attributes': attr }),
 				headers: {
-				  'Content-Type': 'application/json'
+				'Content-Type': 'application/json'
 				}
-			  })
-			  .then(res => res.json())
-			  .then(d => {
-				render_segments(d);
-				segments.find(".spinner-border").addClass("collapse");
-					})
+			})
+			.then(res => res.json())
+			.then(d => {
+				save_gpx("track.gpx",d.gpx)
+			})
+
 		}
-      }
 
-      function get_previous_point(gpx,time) {
-	  
-      }
+		function load_gpx() {
+			var input = document.getElementById("customFile");
+			var fr=new FileReader();
+
+			var segments = $("#segments");
+			segments.removeClass("collapse");
+			clear_table();
+			segments.find(".spinner-border").removeClass("collapse");
+			
+			var	segdiv = $("#seg_div");
+
+			fr.readAsText(input.files[0]);
+			fr.onload=function(){
+				fetch('/load', {
+					method: 'POST',
+					body: JSON.stringify({ 'gpx': fr.result }),
+					headers: {
+					'Content-Type': 'application/json'
+					}
+				})
+				.then(res => res.json())
+				.then(d => {
+					render_segments(d.info);
+					gpx_xml = d.xml;
+					segments.find(".spinner-border").addClass("collapse");
+				})
+			}
+		}
+
       
-      function render_segments(gpx_info) {
-	  	var segments = $("#segments");
-	  	var table = segments.find("#segment-table");
+		function render_segments(gpx_info) {
+			var segments = $("#segments");
+			var table = segments.find("#segment-table");
 
-		var index = 0;
-		gpx_info.forEach(function(segment) {
-			var row = $('<tr id="seg_row"></tr>');
-			row.append($(`<td name="col"><input class="form-check-input" type="checkbox" id="check${index}" name="option${index}" value="true" checked></td>`));
-			row.append($('<td name="col"></td>').text(segment.time));
-			row.append($('<td name="col"></td>').text(segment.depart));
-			row.append($('<td name="col"></td>').text(segment.arrive));
-			row.append($('<td name="col"></td>').text(segment.distance));
-			row.append($('<td name="col"></td>').text(segment.duration));
-			row.append($('<td name="col"></td>').text(segment.max_alt));
-			var text = $(`<textarea class="form-control" id="description_${index}" name="description" rows="3" cols="80"></textarea>`).text(segment.description);
-			row.append($('<td name="col id="seg_desc"></td>').append(text));
-			table.append(row);
-		  	index++;
-		});
-	
-	  
-      }
+			var index = 0;
+			gpx_info.forEach(function(segment) {
+				var row = $('<tr id="seg_row"></tr>');
+				row.append($(`<td name="col"><input class="form-check-input seg_sel" type="checkbox" id="check${index}" name="option${index}" value="true" checked></td>`));
+				row.append($('<td name="col"></td>').text(segment.time));
+				row.append($('<td name="col" id="depart"></td>').text(segment.depart));
+				row.append($('<td name="col" id="arrive"></td>').text(segment.arrive));
+				row.append($('<td name="col"></td>').text(segment.distance));
+				row.append($('<td name="col"></td>').text(segment.duration));
+				row.append($('<td name="col"></td>').text(segment.max_alt));
+				var text = $(`<textarea class="form-control" id="description" name="description" rows="3" cols="80"></textarea>`).text(segment.description);
+				row.append($('<td name="col id="seg_desc"></td>').append(text));
+				table.append(row);
+				index++;
+			});
+		
+		
+		}
     </script>
   </head>
   <body>
@@ -104,6 +146,11 @@
 		<label class="form-label" for="customFile">GPX file</label>
 		<input type="file" class="form-control" id="customFile" />
 		<input type="button" class="btn btn-primary btn-lg form-control" id="submit" value="LOAD" onclick="load_gpx()" />
+      </div>
+      <div class="container-fluid py-4">
+		<label class="form-label" for="customFile">Export GPX</label>
+		<input type="file" class="form-control" id="exportFile" />
+		<input type="button" class="btn btn-primary btn-lg form-control" id="submit" value="SAVE" onclick="process_gpx()" />
       </div>
     </section>
 	<section class="p-5 mb-4 bg-light rounded-3" id="main">

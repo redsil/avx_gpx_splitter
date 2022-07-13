@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 from flask import Flask,render_template,request
 import gpx_splitter
+from simplejson import JSONEncoder
 
 app = Flask(__name__)
 
@@ -8,8 +9,8 @@ app = Flask(__name__)
 def hello_world():
     return(render_template("index.html"))
 
-@app.route("/process", methods=['GET', 'POST'])
-def process_gpx():
+@app.route("/load", methods=['GET', 'POST'])
+def load_gpx():
     json = {}
     if (request.method == "POST"):
         json = request.get_json()
@@ -19,6 +20,18 @@ def process_gpx():
     if (request.method == "GET"):
         json = {'gpx': "nothing to see here"}
 
-
-    
     return(gpx_info)
+
+@app.route("/process", methods=['GET', 'POST'])
+def process_gpx():
+    json = {}
+    gpx_xml = ""
+    if (request.method == "POST"):
+        json = request.get_json()
+        gpx_data = gpx_splitter.load_gpx(json['gpx'])
+        gpx_xml = gpx_splitter.xml_get_split_gpx(gpx_data,json['attributes'])
+
+    if (request.method == "GET"):
+        json = {'gpx': "nothing to see here"}
+
+    return(JSONEncoder().encode({'gpx':gpx_xml}))
