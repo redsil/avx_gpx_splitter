@@ -46,13 +46,13 @@
 			$("tr#seg_row").each(function () {
 				if ($(this).find(".seg_sel").prop("checked")) {
 					attr.push({	'name': $(this).find("#depart").text() + "-" + $(this).find("#arrive").text(),
-												'description': $(this).find("#description").text() });
+												'description': $(this).find("#description").val() });
 				}
 				else {
 					attr.push({});
 				}
 			});
-			console.log(attr);
+			show_spinner();
 			fetch('/process', {
 				method: 'POST',
 				body: JSON.stringify({ 'gpx': gpx_xml, 'attributes': attr }),
@@ -62,9 +62,17 @@
 			})
 			.then(res => res.json())
 			.then(d => {
-				save_gpx("track.gpx",d.gpx)
+				hide_spinner();
+				save_gpx("track.gpx",d.gpx);
 			})
 
+		}
+
+		function show_spinner() {
+			$(".spinner-border").removeClass("collapse");
+		}
+		function hide_spinner() {
+			$(".spinner-border").addClass("collapse");
 		}
 
 		function load_gpx() {
@@ -72,9 +80,8 @@
 			var fr=new FileReader();
 
 			var segments = $("#segments");
-			segments.removeClass("collapse");
 			clear_table();
-			segments.find(".spinner-border").removeClass("collapse");
+			show_spinner();
 			
 			var	segdiv = $("#seg_div");
 
@@ -91,7 +98,7 @@
 				.then(d => {
 					render_segments(d.info);
 					gpx_xml = d.xml;
-					segments.find(".spinner-border").addClass("collapse");
+					hide_spinner();
 				})
 			}
 		}
@@ -142,15 +149,10 @@
 	  </nav>
 
 	<section class="p-5 mb-4 bg-light rounded-3" id="main">
-      <div class="container-fluid py-4">
+      <div class="container py-4">
 		<label class="form-label" for="customFile">GPX file</label>
 		<input type="file" class="form-control" id="customFile" />
 		<input type="button" class="btn btn-primary btn-lg form-control" id="submit" value="LOAD" onclick="load_gpx()" />
-      </div>
-      <div class="container-fluid py-4">
-		<label class="form-label" for="customFile">Export GPX</label>
-		<input type="file" class="form-control" id="exportFile" />
-		<input type="button" class="btn btn-primary btn-lg form-control" id="submit" value="SAVE" onclick="process_gpx()" />
       </div>
     </section>
 	<section class="p-5 mb-4 bg-light rounded-3" id="main">
@@ -176,6 +178,10 @@
 				</thead>
 			</table>
 		</div>
-    </section>
+		<div class="container py-4">
+			<label class="form-label" for="customFile">Export GPX</label>
+			<input type="button" class="btn btn-primary btn-lg form-control" id="submit" value="SAVE" onclick="process_gpx()" />
+		  </div>
+		</section>
   </body>
 </html>
