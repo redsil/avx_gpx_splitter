@@ -127,7 +127,6 @@ def split_into_tracks(gpx):
     
 
 def delete_track(gpx,track_no):
-    print(f"DEBUG deleting track {track_no} of {len(gpx.tracks)}")
     del gpx.tracks[track_no]                            
 
 def set_track_name(gpx,track_no,name):
@@ -190,7 +189,6 @@ def xml_get_split_gpx(gpx_data,attributes):
     airports = filter_airports(load_airports("airports.csv"),gpx_data)
     split_into_segments(gpx_data,airports)
     new_gpx = split_into_tracks(gpx_data)
-    print(f"DEBUG {attributes}")
 
     # Update names and descriptions
     for i,att in enumerate(attributes):

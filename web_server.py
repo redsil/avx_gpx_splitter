@@ -3,6 +3,7 @@ from flask import Flask,render_template,request
 import os
 import gpx_splitter
 from simplejson import JSONEncoder
+import sys
 
 app = Flask(__name__)
 
@@ -44,3 +45,8 @@ def update_airports():
     os.system(f"curl -o airports.csv {url}")
     
     return(JSONEncoder().encode({'msg':f"Airports updated from {url}"}))
+
+
+if __name__ == '__main__':
+    app.run(host="localhost", port=int(sys.argv[1]), debug=False)
+    
