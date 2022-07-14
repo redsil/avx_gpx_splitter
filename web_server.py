@@ -11,7 +11,7 @@ app = Flask(__name__)
 def hello_world():
     return(render_template("index.html"))
 
-@app.route("/load", methods=['GET', 'POST'])
+@app.route("/load", methods=['POST'])
 def load_gpx():
     json = {}
     if (request.method == "POST"):
@@ -19,10 +19,9 @@ def load_gpx():
         gpx_data = gpx_splitter.load_gpx(json['gpx'])
         gpx_info = gpx_splitter.json_get_gpx_info(gpx_data)
 
-    if (request.method == "GET"):
-        json = {'gpx': "nothing to see here"}
+        return(gpx_info)
 
-    return(gpx_info)
+
 
 @app.route("/process", methods=['GET', 'POST'])
 def process_gpx():
@@ -33,10 +32,16 @@ def process_gpx():
         gpx_data = gpx_splitter.load_gpx(json['gpx'])
         gpx_xml = gpx_splitter.xml_get_split_gpx(gpx_data,json['attributes'])
 
+        if (gpx_xml == ""):
+            json = {'error':'Failed to process gpx - airports database may need update'} 
+        else:
+            json = {'gpx':gpx_xml}
+
+
     if (request.method == "GET"):
         json = {'gpx': "nothing to see here"}
 
-    return(JSONEncoder().encode({'gpx':gpx_xml}))
+    return(JSONEncoder().encode(json))
 
 
 @app.route("/update_airports", methods=['GET'])

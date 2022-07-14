@@ -92,27 +92,46 @@
 			var input = document.getElementById("customFile");
 			var fr=new FileReader();
 
-			var segments = $("#segments");
-			clear_table();
-			show_spinner();
-			
-			var	segdiv = $("#seg_div");
+			if (input.files.length <= 0) {
+				alert("Error: No file selected");
+			}
+			else {
+				var segments = $("#segments");
+				clear_table();
+				show_spinner();
+				
+				var	segdiv = $("#seg_div");
 
-			fr.readAsText(input.files[0]);
-			fr.onload=function(){
-				fetch('/load', {
-					method: 'POST',
-					body: JSON.stringify({ 'gpx': fr.result }),
-					headers: {
-					'Content-Type': 'application/json'
-					}
-				})
-				.then(res => res.json())
-				.then(d => {
-					render_segments(d.info);
-					gpx_xml = d.xml;
-					hide_spinner();
-				})
+				fr.readAsText(input.files[0]);
+				fr.onload=function(){
+					fetch('/load', {
+						method: 'POST',
+						body: JSON.stringify({ 'gpx': fr.result }),
+						headers: {
+						'Content-Type': 'application/json'
+						}
+					})
+					.then(res => {
+						if (!res.ok) {
+							hide_spinner();
+							alert("ERROR: Failed to load " + input.files[0].name);
+							return('{}');
+						}
+						else {	
+							return(res.json());
+						}
+					})	
+					.then(d => {
+						if ('info' in d) {
+							render_segments(d.info);
+							gpx_xml = d.xml;
+						}
+						if ('error' in d) {
+							alert(d.error);
+						}
+						hide_spinner();
+					})
+				}
 			}
 		}
 
@@ -146,7 +165,7 @@
 		<div class="collapse navbar-collapse" id="navbarTogglerDemo03">
 			<ul class="navbar-nav">
 			  <li class="active me-3">
-				<h1 class="nav-link">Aviation GPX splitter/anaylzer</h1>
+				<h1 class="nav-link">Aviation GPX splitter/analyzer</h1>
 			  </li>
 			</ul>
 		</div>

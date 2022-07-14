@@ -41,15 +41,19 @@ def filter_airports(airports,gpx): # lat1,lon1,lat2,lon2):
 
 def load_airports(filename):
     airports = []
-    with open(filename, newline='') as csvfile:
-        reader = csv.DictReader(csvfile)
-        for row in reader:
-            airport = {}
-            id = None
-            for col in row: 
-                if (col == "id"): id = row[col]
-                airport[col] = row[col]
-            airports.append(airport)
+    try:
+        with open(filename, newline='') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                airport = {}
+                id = None
+                for col in row: 
+                    if (col == "id"): id = row[col]
+                    airport[col] = row[col]
+                airports.append(airport)
+    except:
+        airports = []
+        
     return airports
 
 
@@ -75,7 +79,10 @@ def closest_airport(airports,lat,lon,alt=None):
 
 def load_gpx(text):
     gpx_stream = StringIO(text)
-    gpx_data = gpxpy.parse(gpx_stream)
+    try:
+        gpx_data = gpxpy.parse(gpx_stream)
+    except:
+        gpx_data = {}
     return gpx_data
 
 
@@ -186,30 +193,41 @@ max alt:  {info['max_alt']}ft
 # An attribute index that is None means to remove that track from the generated gpx
 def xml_get_split_gpx(gpx_data,attributes):
 
-    airports = filter_airports(load_airports("airports.csv"),gpx_data)
-    split_into_segments(gpx_data,airports)
-    new_gpx = split_into_tracks(gpx_data)
+    all_airports = load_airports("airports.csv")
+    if (len(all_airports) == 0) or not gpx_data:
+        return ""
 
-    # Update names and descriptions
-    for i,att in enumerate(attributes):
-        if ("name" in att):
-            set_track_name(new_gpx,i,att['name'])
+    else:
+        airports = filter_airports(all_airports,gpx_data)
+        split_into_segments(gpx_data,airports)
+        new_gpx = split_into_tracks(gpx_data)
 
-            if ("description" in att):
-                set_track_desc(new_gpx,i,att['description'])
+        # Update names and descriptions
+        for i,att in enumerate(attributes):
+            if ("name" in att):
+                set_track_name(new_gpx,i,att['name'])
 
-    for i,att in reversed(list(enumerate(attributes))):
-        if (not "name" in att):
-            # Remove tracks not specified                
-            delete_track(new_gpx,i)
-    
-    return new_gpx.to_xml()
+                if ("description" in att):
+                    set_track_desc(new_gpx,i,att['description'])
+
+        for i,att in reversed(list(enumerate(attributes))):
+            if (not "name" in att):
+                # Remove tracks not specified                
+                delete_track(new_gpx,i)
+        
+        return new_gpx.to_xml()
 
 def json_get_gpx_info(gpx_data):
-    airports = filter_airports(load_airports("airports.csv"),gpx_data)
-    split_into_segments(gpx_data,airports)
-    info_list = [info for track in gpx_data.tracks for info in [segment_info(segment,airports) for segment in track.segments]]
-    return JSONEncoder().encode({'xml':gpx_data.to_xml(),'info': info_list})
+    all_airports = load_airports("airports.csv")
+    if (len(all_airports) == 0):
+        return JSONEncoder().encode({ 'error': 'No airports loaded'})
+    elif not gpx_data:
+        return JSONEncoder().encode({ 'error': 'invalid GPX'})
+    else:         
+        airports = filter_airports(all_airports,gpx_data)
+        split_into_segments(gpx_data,airports)
+        info_list = [info for track in gpx_data.tracks for info in [segment_info(segment,airports) for segment in track.segments]]
+        return JSONEncoder().encode({'xml':gpx_data.to_xml(),'info': info_list})
 
     
 
