@@ -75,6 +75,19 @@
 			$(".spinner-border").addClass("collapse");
 		}
 
+		function update_airports() {
+			fetch('/update_airports', {
+				method: 'GET',
+				headers: {
+					'Content-Type': 'application/json'
+				}
+			})
+			.then(res => res.json())
+			.then(d => {
+				alert(d.msg);
+			});
+		}
+
 		function load_gpx() {
 			var input = document.getElementById("customFile");
 			var fr=new FileReader();
@@ -131,21 +144,25 @@
   <body>
     <nav class="navbar navbar-expand-lg navbar-dark border border-dark bg-dark">
 		<div class="collapse navbar-collapse" id="navbarTogglerDemo03">
-			<ul class="navbar-nav ms-auto me-sm-2 mt-2 mt-lg-0">
-			  <li class="nav-item active me-3">
+			<ul class="navbar-nav">
+			  <li class="active me-3">
 				<h1 class="nav-link">Aviation GPX splitter/anaylzer</h1>
 			  </li>
 			</ul>
-  
-		  </div>
-		<div class="container">
+		</div>
+		<div class="collapse navbar-collapse" id="navbarTogglerDemo03">
+			<form class="container-fluid justify-content-right">
+				<button class="btn btn-sm btn-outline-secondary" type="button" style="float: right;" onclick="update_airports()">Update Airports</button>
+			  </form>
+		</div>
+		<!--div class="container">
 		  <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
 			data-bs-target="#navbarTogglerDemo03"
 			aria-controls="navbarTogglerDemo03" aria-expanded="false"
 			aria-label="Toggle navigation">
 			<span class="navbar-toggler-icon"></span>
 		  </button>
-		</div>
+		</div-->
 	  </nav>
 
 	<section class="p-5 mb-4 bg-light rounded-3" id="main">

@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 from flask import Flask,render_template,request
+import os
 import gpx_splitter
 from simplejson import JSONEncoder
 
@@ -35,3 +36,11 @@ def process_gpx():
         json = {'gpx': "nothing to see here"}
 
     return(JSONEncoder().encode({'gpx':gpx_xml}))
+
+
+@app.route("/update_airports", methods=['GET'])
+def update_airports():
+    url = "https://davidmegginson.github.io/ourairports-data/airports.csv"
+    os.system(f"curl -o airports.csv {url}")
+    
+    return(JSONEncoder().encode({'msg':f"Airports updated from {url}"}))
