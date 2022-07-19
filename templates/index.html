@@ -12,6 +12,110 @@
 
 		var gpx_xml = "";
 
+
+		function load_tracker() {
+			$("#tracks-table-body tr#tracks_row").remove();
+			fetch('/tracker?is_connected&is_tracking&is_running&list_files', {
+				method: 'GET',
+				headers: {
+				'Content-Type': 'application/json'
+				}
+			})
+			.then(res => res.json())
+			.then(d => {
+				if (d.connected) {
+					$("#connection_status").removeClass("bg-danger").addClass("bg-success");
+				} else {
+					$("#connection_status").removeClass("bg-success").addClass("bg-danger");
+				}
+				if (d.tracking) {
+					$("#tracking_status").removeClass("bg-danger").addClass("bg-success");
+				} else {
+					$("#tracking_status").removeClass("bg-success").addClass("bg-danger");
+				}
+				if (d.running) {
+					$("#pause").removeClass("text-danger").addClass("text-success").text("PAUSE");
+				} else {
+					$("#pause").removeClass("text-success").addClass("text-danger").text("RESUME");
+				}
+				if (d.files) {
+					table = $("#tracks-table-body");
+					d.files.sort().forEach(function(file,index) {
+						var row = $('<tr id="tracks_row"></tr>');
+						row.append($(`<td name="col"><button class="btn btn-action-1 mx-xxl-1 rounded-pill bg-primary text-light" onclick="load_track()">Load</button></td>`));
+						row.append($('<td id="file" name="col"></td>').text(file));
+						row.append($('<td name="col"><button class="btn btn-action-1 mx-xxl-1 rounded-pill bg-primary text-light" onclick="delete_file()">Delete</button></td>'));
+						table.append(row);
+					})
+				}
+			})
+
+		}
+
+		function delete_file() {
+			var row = $(event.srcElement).parent().parent();
+			var file = row.find("#file").text();
+			var answer = confirm(`Do you really want to delete ${file}?`);
+			if (answer) {
+				fetch('/tracker?command=delete_gpx&filename=' + file, {
+					method: 'GET',
+					headers: {
+						'Content-Type': 'application/json'
+					}
+				})
+				.then(res => res.json())
+				.then(d => {
+					if (!d.status) {
+						alert("Unable to delete")
+					}
+					row.remove();
+					load_tracker();
+				})
+			}
+		}
+
+		function load_track() {
+			var file = ($(event.srcElement).parent().parent().find("#file").text());
+			fetch('/tracker?get_gpx&filename=' + file, {
+				method: 'GET',
+				headers: {
+					'Content-Type': 'application/json'
+				}
+			})
+			.then(res => res.json() )
+			.then(d => {
+				console.log(d);
+				load_gpx_data(d.gpx_data);
+			})
+			
+		}
+
+		function write_track() {
+			fetch('/tracker?command=flush', {
+				method: 'GET',
+				headers: {
+					'Content-Type': 'application/json'
+				}
+			})
+			.then(res => res.json())
+			.then(d => {
+				load_tracker();
+			})
+		}
+
+		function pause_unpause_tracker() {
+			fetch('/tracker?command=pause', {
+				method: 'GET',
+				headers: {
+					'Content-Type': 'application/json'
+				}
+			})
+			.then(res => res.json())
+			.then(d => {
+				load_tracker();
+			})
+		}
+
 		function save_gpx(filename,gpx) {
 			const blob = new Blob([gpx], {type: 'text/xml'});
 			if(window.navigator.msSaveOrOpenBlob) {
@@ -88,49 +192,48 @@
 			});
 		}
 
-		function load_gpx() {
-			var input = document.getElementById("customFile");
-			var fr=new FileReader();
+		function load_gpx_data(data) {
+			clear_table();
+			show_spinner();
+			fetch('/load', {
+				method: 'POST',
+				body: JSON.stringify({ 'gpx': data }),
+				headers: {
+				'Content-Type': 'application/json'
+				}
+			})
+			.then(res => {
+				hide_spinner();
+				if (!res.ok) {
+					hide_spinner();
+					return({'error': 'Failed to load data'});
+				}
+				else {	
+					return(res.json());
+				}
+			})	
+			.then(d => {
+				if ('info' in d) {
+					render_segments(d.info);
+					gpx_xml = d.xml;
+				}
+				if ('error' in d) {
+					alert(d.error);
+				}
+			})
+		}
 
+
+		function load_gpx_action() {
+			var input = document.getElementById("customFile");
 			if (input.files.length <= 0) {
 				alert("Error: No file selected");
 			}
 			else {
-				var segments = $("#segments");
-				clear_table();
-				show_spinner();
-				
-				var	segdiv = $("#seg_div");
-
+				var fr=new FileReader();
 				fr.readAsText(input.files[0]);
 				fr.onload=function(){
-					fetch('/load', {
-						method: 'POST',
-						body: JSON.stringify({ 'gpx': fr.result }),
-						headers: {
-						'Content-Type': 'application/json'
-						}
-					})
-					.then(res => {
-						if (!res.ok) {
-							hide_spinner();
-							alert("ERROR: Failed to load " + input.files[0].name);
-							return('{}');
-						}
-						else {	
-							return(res.json());
-						}
-					})	
-					.then(d => {
-						if ('info' in d) {
-							render_segments(d.info);
-							gpx_xml = d.xml;
-						}
-						if ('error' in d) {
-							alert(d.error);
-						}
-						hide_spinner();
-					})
+					load_gpx_data(fr.result);
 				}
 			}
 		}
@@ -138,7 +241,7 @@
       
 		function render_segments(gpx_info) {
 			var segments = $("#segments");
-			var table = segments.find("#segment-table");
+			var table = segments.find("#segment-table-body");
 
 			var index = 0;
 			gpx_info.forEach(function(segment) {
@@ -158,10 +261,11 @@
 		
 		
 		}
+		$().ready(load_tracker)
     </script>
   </head>
   <body>
-    <nav class="navbar navbar-expand-lg navbar-dark border border-dark bg-dark">
+    <nav class="navbar sticky-top navbar-expand-lg navbar-dark border border-dark bg-dark">
 		<div class="collapse navbar-collapse" id="navbarTogglerDemo03">
 			<ul class="navbar-nav">
 			  <li class="active me-3">
@@ -188,7 +292,7 @@
       <div class="container py-4">
 		<label class="form-label" for="customFile">GPX file</label>
 		<input type="file" class="form-control" id="customFile" />
-		<input type="button" class="btn btn-primary btn-lg form-control" id="submit" value="LOAD" onclick="load_gpx()" />
+		<input type="button" class="btn btn-primary btn-lg form-control" id="submit" value="LOAD" onclick="load_gpx_action()" />
       </div>
     </section>
 	<section class="p-5 mb-4 bg-light rounded-3" id="main">
@@ -212,6 +316,8 @@
 						<th>Track Description</th>
 	    			</tr>
 				</thead>
+				<tbody id="segment-table-body">
+				</tbody>
 			</table>
 		</div>
 		<div class="container py-4">
@@ -219,5 +325,56 @@
 			<input type="button" class="btn btn-primary btn-lg form-control" id="submit" value="SAVE" onclick="process_gpx()" />
 		  </div>
 		</section>
-  </body>
+
+		<section class="p-5 mb-4 bg-light rounded-3" id="main">
+			<nav class="bg-bg-3 py-4 py-lg-7" sf-type="section" sf-label="Section">
+				<div sf-type="container" sf-label="Show on Desktop (>=992px)" class="d-none d-lg-block">
+					<div sf-type="container" sf-label="Container" class="container">
+						<div class="row justify-content-between align-items-center" sf-type="container" sf-label="Row">
+							<div class="col-12" sf-type="container" sf-label="Column">
+								<div class="p-4 text-center bg-bg-2 text-dark-1" sf-type="text" sf-label="Text">
+									<h1 id="seg_header" class="text-center">Flight Recording</h1>
+								</div>
+							</div>
+							<div class="col-6" sf-type="container" sf-label="Column">
+								<button href="#" class="btn btn-action-1 mx-xxl-1 rounded-pill bg-primary text-light" sf-type="btn" sf-label="Button" onclick="load_tracker()">
+									Refresh
+								</button>
+								<button href="#" class="btn btn-action-1 mx-xxl-1 rounded-pill bg-primary text-success" sf-type="btn" sf-label="Button" id="pause" onclick="pause_unpause_tracker()">
+									Pause
+								</button>
+								<button href="#" class="btn btn-action-1 mx-xxl-1 rounded-pill bg-primary text-light" sf-type="btn" sf-label="Button" onclick="write_track()">
+									Write
+								</button>
+							</div>
+							<div class="text-end col-6 bg-body" sf-type="container" sf-label="Column">
+								<label class="bg-success px-xxl-3 py-xxl-2 mx-xxl-2 rounded-pill text-dark" id="tracking_status">
+									TRACKING
+								</label>
+								<label class="bg-success px-xxl-3 py-xxl-2 mx-xxl-2 rounded-pill text-dark" id="connection_status">
+									CONNECTED
+								</label>
+							</div>
+						</div>
+					</div>
+				</div>
+			</nav>
+			<div class="py-4 justify-content-center" id="tracks">
+				<h2 id="seg_header" class="text-center">Captured Tracks</h2>
+				<div class="d-flex py-4 justify-content-center" id="tracks">
+					<table class="table table-responsive w-auto justify-content-center" id="tracks-table">
+					<thead>
+					  <tr scope="row">
+						  <th scope="col" class="text-center">Load</th>
+						  <th scope="col" class="text-center">Track</th>
+						  <th scope="col" class="text-center">Delete</th>
+					  </tr>
+				  </thead>
+				  <tbody id="tracks-table-body">
+				  </tbody>
+				</table>
+			</div>
+			</div>
+		</section>
+	</body>
 </html>

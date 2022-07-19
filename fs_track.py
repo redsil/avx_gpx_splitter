@@ -9,10 +9,16 @@ import math
 import time
 import threading
 from itsdangerous import NoneAlgorithm
+import os
 
 
-class sim_track:
+class fs_track:
     def __init__(self,**args):
+        if (not 'port' in args):
+            args['port'] = 49002
+        if (not 'format' in args ):
+            args['format'] = 'track_%D_%T.gpx'
+
         self.s=socket(AF_INET, SOCK_DGRAM)
         self.s.settimeout(60)
         self.s.bind(('',args['port']))
@@ -20,46 +26,79 @@ class sim_track:
 
         self.file_format = args['format']
         self.outdir = args['outdir']
+        self.gpx_file = None
         
         self.running = False
 
         self.last_pos_time = 0.0
         self.last_lon = 0.0
         self.last_lat = 0.0
-        self.enabled = False
+        self.enabled = True
         self.sample_rate = 3  # how often to post a position to the gpx file - used to average out rounding errors
         self.completed_gpx = []
-        self.close_gpx = False  # used to trigger the thread loop and close out the gpx file
+        self.__close_gpx = False  # used to trigger the thread loop and close out the gpx file
         self.have_connection = False
+        self.wait_for_position = True # false when actively tracking and creating a segment
+        self.__num_segments = 0
 
     def is_connected(self):
         return self.have_connection
 
-    def bind_socket(self):
-        # 49002
-        return self.s.bind(('',self.port))
-
-    def start(self):
+    def enable(self):
         self.enabled = True    
 
-    def stop(self):
+    def disable(self):
         self.enabled = False
 
     def close_gpx(self):
-        self.close_gpx = True
+        self.__close_gpx = True
+
+    def list_files(self):
+#        return self.completed_gpx
+        # DEBUG
+        files = [ f"tracks/{file}"  for file in os.listdir("tracks")  if not self.gpx_file or self.gpx_file.closed or file != self.gpx_file.name]
+
+        return sorted(files)
+
+    def is_tracking(self):
+        return not self.wait_for_position
+
+    def is_running(self):
+        return self.running and self.enabled
+
+    def delete_gpx(self,filename):
+        try:
+            os.remove(filename)
+            return True
+        except OSError as e:
+            print(f"Unable to delete {filename}: {e.strerror}")
+            return False
+
+    def read_gpx(self,filename):
+        try:
+            fd = open(filename)
+            gpx_data = fd.read()
+            fd.close()
+            return(gpx_data)
+        except Exception as e:
+            print(f"Error: unable to read {filename}: {e}")
+            return None
+        
 
     def gen_filename(self,format):
 
+        dt = datetime.now()
+        date_str = str(dt.date())
+        time_str = f'{dt.hour:02}{dt.second:02}'
         if (format):
-            dt = datetime.now()
             filename = format
-            filename = re.sub(pattern=r'%D',repl=str(dt.date()),string=filename,count=0)
-            filename = re.sub(pattern=r'%T',repl=f'{dt.hour:02}{dt.second:02}',string=filename,count=0)
+            filename = re.sub(pattern=r'%D',repl=date_str,string=filename,count=0)
+            filename = re.sub(pattern=r'%T',repl=time_str,string=filename,count=0)
         else:
-            filename = "track.gpx"
+            filename = f"track_{date_str}_{time_str}.gpx"
         return(filename)
 
-    def is_valid_position(self,lat,lon,alt):
+    def __is_valid_position(self,lat,lon,alt):
         # position valid if not around sea level at 0,0 (MSFS2020 reset position)
         if (alt < 100 and
             math.fabs(lat) < .5 and
@@ -73,7 +112,7 @@ class sim_track:
         else:
             return(True)
             
-    def parse_position(self,data,ts):
+    def __parse_position(self,data,ts):
         # "XGPSFlight Events,-83.208471,40.124682,2310.1),58.3,75.1"
         fields = data.split(r',')
         lat,lon,alt = (None,None,None)
@@ -97,36 +136,43 @@ class sim_track:
         return(lat,lon,alt,gpx)
 
     def start_thread(self):
-        thread = threading.Thread(target=self.run, args=(),daemon=True)
+        thread = threading.Thread(target=self.__run, args=(),daemon=True)
         thread.start()
         print("Thread Started")
+        self.running = True
         return(thread)
 
-    def finish_segment(self,file):
-        print("  </trkseg>",file=file,flush=True)
+    def __finish_segment(self):
+        if (not self.gpx_file.closed):
+            print("  </trkseg>",file=self.gpx_file,flush=True)
 
-    def finish_gpx(self,file):
-        if (not file.closed):
-            print(" </trk>",file=file)
-            print("</gpx>",file=file)
-            self.completed_gpx.append(gpx_file.name)
-            file.close()
+    def __start_segment(self):
+        if (not self.gpx_file.closed):
+            self.__num_segments += 1
+            print("  <trkseg>",file=self.gpx_file,flush=True)
+                        
+
+    def __finish_gpx(self):
+        if (not self.gpx_file.closed):
+            print(" </trk>",file=self.gpx_file)
+            print("</gpx>",file=self.gpx_filefile)
+            self.completed_gpx.append(self.gpx_file.name)
+            self.gpx_file.close()
+            self.wait_for_position = True  # reset waiting state so we can generate a new GPX when a position received
+            self.__num_segments = 0
         
-    def run(self):
-        wait_for_position = True
-        self.start()
+    def __run(self):
+        # create output dir if it doesn't exist
+        os.makedirs(self.outdir,exist_ok=True)
         
         self.last_pos_time = 0.0
         self.last_lon = 0.0
         self.last_lat = 0.0
 
-
-        gpx_file = None
-
         while True:
-            if self.close_gpx and gpx_file:
-                self.finish_gpx(gpx_file)
-                self.close_gpx = False
+            if self.__close_gpx and self.gpx_file:
+                self.__finish_gpx()
+                self.__close_gpx = False
 
             if self.enabled:
                 m = None
@@ -138,7 +184,7 @@ class sim_track:
                 except OSError as msg:
                     if (self.have_connection == True):
                         print("Connection closed, finalizing GPX file")
-                        self.finish_gpx(gpx_file)
+                        self.__finish_gpx(self.gpx_file)
                         self.have_connection = False
                     continue
                         
@@ -148,7 +194,7 @@ class sim_track:
                     print("Failed to decode packet, skipping")
                     continue
                         
-                lat,lon,alt,gpx_string = self.parse_position(data,ts)
+                lat,lon,alt,gpx_string = self.__parse_position(data,ts)
 
                 if (not (lat and lon and alt)):
                     if (time.time() - self.last_pos_time) <= (self.sample_rate * 3):
@@ -156,42 +202,43 @@ class sim_track:
                         continue
                     
                     # No longer seeing position updates, close segment and wait for new position
-                    elif not wait_for_position:
+                    elif not self.wait_for_position:
                         print("Closing segment due to not seeing position updates in last 10 seconds")
-                        print("  </trkseg>",file=gpx_file,flush=True)
-                        wait_for_position = True
+                        self.__finish_segment()
+                        self.wait_for_position = True
 
                 else:
-                    if wait_for_position and self.is_valid_position(lat,lon,alt):
+                    if self.wait_for_position and self.__is_valid_position(lat,lon,alt):
                         # Create new file if needed
-                        if not gpx_file or gpx_file.closed:
+                        if not self.gpx_file or self.gpx_file.closed:
                             filename = f'{self.outdir}/{self.gen_filename(self.file_format)}'
-                            gpx_file = open(filename,'w')            
+                            self.gpx_file = open(filename,'w')            
                             print(f"First position received {lat:.2f},{lon:.2f},{alt:.2f}, starting GPX generation {filename}")
                             print("""<?xml version="1.0" encoding="UTF-8"?>
         <gpx xmlns="http://www.topografix.com/GPX/1/1" version="1.1" creator="AVX flight tracker" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
         <trk>
-                """,file=gpx_file)
+                """,file=self.gpx_file)
 
                         # Start segment 
-                        print("  <trkseg>",file=gpx_file,flush=True)
-                        wait_for_position = False
+                        self.__num_segments = 0
+                        self.__start_segment()
+                        self.wait_for_position = False
 
                     # ongoing segment
-                    if not wait_for_position and (time.time() - self.last_pos_time) >= self.sample_rate:
-                        if not self.is_valid_position(lat,lon,alt):
+                    if not self.wait_for_position and (time.time() - self.last_pos_time) >= self.sample_rate:
+                        if not self.__is_valid_position(lat,lon,alt):
                             print("Got invalid position, closing segment and waiting for new position to start a new track segment")
-                            print("  </trkseg>",file=gpx_file,flush=True)
-                            wait_for_position = True
+                            self.finish_segment()
+                            self.wait_for_position = True
 
                         else:
-                            print(gpx_string,file=gpx_file,flush=True)
+                            print(gpx_string,file=self.gpx_file,flush=True)
                             self.last_pos_time = time.time()                
 
                     self.last_lat = lat
                     self.last_lon = lon
             else:  # not enabled
-                self.close_gpx(gpx_file)
+                self.__finish_gpx()
                 self.have_connection = False
                 sleep(5)
 
@@ -203,6 +250,6 @@ if (__name__ == "__main__"):
     ap.add_argument('-port','-p',help='Specify the port to listen to, default 49002 (xplane UDP broadcast)',default=49002)
     args = ap.parse_args()
     
-    tracker = sim_track(outdir=args.outdir, port=int(args.port), format=args.format)
+    tracker = fs_track(outdir=args.outdir, port=int(args.port), format=args.format)
     t_thread = tracker.start_thread()
     t_thread.join()
