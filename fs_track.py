@@ -89,7 +89,7 @@ class fs_track:
 
         dt = datetime.now()
         date_str = str(dt.date())
-        time_str = f'{dt.hour:02}{dt.second:02}'
+        time_str = f'{dt.hour:02}{dt.minute:02}'
         if (format):
             filename = format
             filename = re.sub(pattern=r'%D',repl=date_str,string=filename,count=0)
