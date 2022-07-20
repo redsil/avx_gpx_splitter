@@ -1,16 +1,47 @@
 #!/usr/bin/python3
-from flask import Flask,render_template,request
+from flask import Flask,render_template,request,Response
 import os
 import gpx_splitter
 from simplejson import JSONEncoder
 import sys
 from fs_track import fs_track
+import queue
+
+# https://maxhalford.github.io/blog/flask-sse-no-deps/
+class MessageAnnouncer:
+
+    def __init__(self):
+        self.listeners = []
+
+    def listen(self):
+        q = queue.Queue(maxsize=10)
+        self.listeners.append(q)
+        return q
+
+    def announce(self, msg):
+        for i in reversed(range(len(self.listeners))):
+            try:
+                self.listeners[i].put_nowait(msg)
+            except queue.Full:
+                del self.listeners[i]
+
+    def format_sse(self,data: str, event=None) -> str:
+        msg = f'data: {data}\n\n'
+        if event is not None:
+            msg = f'event: {event}\n{msg}'
+        return msg
+
 
 app = Flask(__name__)
 
+announcer = MessageAnnouncer()
+
 # Instance Tracker
-fstracker = fs_track(outdir="tracks")
+fstracker = fs_track(outdir="tracks",event_update=lambda : announcer.announce(msg=announcer.format_sse(data='reload')))
 fstracker.start_thread()
+
+
+
 
 @app.route("/")
 def index():
@@ -87,6 +118,25 @@ def tracker():
                     print("deleting ${args['filename']}")
                     ret_val['status']  = fstracker.delete_gpx(args['filename'])
     return(JSONEncoder().encode(ret_val))
+
+
+@app.route('/subscribe', methods=['GET'])
+def subscribe():
+
+    def stream():
+        messages = announcer.listen()  # returns a queue.Queue
+        while True:
+            msg = messages.get()  # blocks until a new message arrives
+            yield msg
+
+    return Response(stream(), mimetype='text/event-stream')
+
+@app.route('/ping')
+def ping():
+    msg = announcer.format_sse(data='pong')
+    announcer.announce(msg=msg)
+    return {'message':msg}, 200
+
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=int(sys.argv[1]), debug=False)

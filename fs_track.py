@@ -18,6 +18,10 @@ class fs_track:
             args['port'] = 49002
         if (not 'format' in args ):
             args['format'] = 'track_%D_%T.gpx'
+        if ('event_update' in args):
+            self.event_update = args['event_update']
+        else:
+            self.event_update = lambda : False
 
         self.s=socket(AF_INET, SOCK_DGRAM)
         self.s.settimeout(60)
@@ -140,6 +144,7 @@ class fs_track:
         thread.start()
         print("Thread Started")
         self.running = True
+        self.event_update()
         return(thread)
 
     def __finish_segment(self):
@@ -161,6 +166,7 @@ class fs_track:
             self.gpx_file.close()
             self.wait_for_position = True  # reset waiting state so we can generate a new GPX when a position received
             self.__num_segments = 0
+            self.event_update()
         
     def __run(self):
         # create output dir if it doesn't exist
@@ -218,7 +224,8 @@ class fs_track:
                             print("""<?xml version="1.0" encoding="UTF-8"?>
         <gpx xmlns="http://www.topografix.com/GPX/1/1" version="1.1" creator="AVX flight tracker" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
         <trk>
-                """,file=self.gpx_file)
+                """,file=self.gpx_file,flush=True)
+                            self.event_update()
 
                         # Start segment 
                         self.__num_segments = 0
@@ -231,6 +238,7 @@ class fs_track:
                             print("Got invalid position, closing segment and waiting for new position to start a new track segment")
                             self.finish_segment()
                             self.wait_for_position = True
+                            self.event_update()
 
                         else:
                             print(gpx_string,file=self.gpx_file,flush=True)
