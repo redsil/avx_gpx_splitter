@@ -242,7 +242,7 @@ class fs_track:
                     if not self.wait_for_position and (time.time() - self.last_pos_time) >= self.sample_rate:
                         if not self.__is_valid_position(lat,lon,alt):
                             print("Got invalid position, closing segment and waiting for new position to start a new track segment")
-                            self.finish_segment()
+                            self.__finish_segment()
                             self.wait_for_position = True
                             self.event_update()
 
