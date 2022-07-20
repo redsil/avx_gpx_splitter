@@ -67,6 +67,12 @@ class fs_track:
     def is_tracking(self):
         return not self.wait_for_position
 
+    def current_file(self):
+        if not self.gpx_file or self.gpx_file.closed:
+            return ""
+        else:
+            return self.gpx_file.name
+
     def is_running(self):
         return self.running and self.enabled
 

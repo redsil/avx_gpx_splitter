@@ -97,6 +97,8 @@ def tracker():
             ret_val['connected'] = fstracker.is_connected()
         if 'is_tracking' in args:
             ret_val['tracking'] = fstracker.is_tracking()
+            if ret_val['tracking']:
+                ret_val['current_track'] = fstracker.current_file()
         if 'is_running' in args:
             ret_val['running'] = fstracker.is_running()
         if 'get_gpx' in args:
