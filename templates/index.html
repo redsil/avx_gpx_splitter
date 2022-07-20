@@ -12,7 +12,6 @@
 
 		var gpx_xml = "";
 
-
 		function load_tracker() {
 			$("#tracks-table-body tr#tracks_row").remove();
 			fetch('/tracker?is_connected&is_tracking&is_running&list_files', {
@@ -30,8 +29,10 @@
 				}
 				if (d.tracking) {
 					$("#tracking_status").removeClass("bg-danger").addClass("bg-success");
+					$("#current_track").text(d.current_track)
 				} else {
 					$("#tracking_status").removeClass("bg-success").addClass("bg-danger");
+					$("#current_track").text("")
 				}
 				if (d.running) {
 					$("#pause").removeClass("text-danger").addClass("text-success").text("PAUSE");
@@ -261,6 +262,15 @@
 		
 		
 		}
+
+		// Handle server side events for updating tracker state
+		const evtSource = new EventSource("/subscribe");
+		evtSource.onmessage = function(event) {
+			if (event.data == "reload") {
+				load_tracker();
+			}
+		}
+
 		$().ready(load_tracker)
     </script>
   </head>
@@ -336,7 +346,7 @@
 									<h1 id="seg_header" class="text-center">Flight Recording</h1>
 								</div>
 							</div>
-							<div class="col-6" sf-type="container" sf-label="Column">
+							<div class="col-4" sf-type="container" sf-label="Column">
 								<button href="#" class="btn btn-action-1 mx-xxl-1 rounded-pill bg-primary text-light" sf-type="btn" sf-label="Button" onclick="load_tracker()">
 									Refresh
 								</button>
@@ -347,7 +357,10 @@
 									Write
 								</button>
 							</div>
-							<div class="text-end col-6 bg-body" sf-type="container" sf-label="Column">
+							<div class="text-end col-4 bg-body" sf-type="container" sf-label="Column">
+								<h5 id="current_track"></h5>
+							</div>
+							<div class="text-end col-4 bg-body" sf-type="container" sf-label="Column">
 								<label class="bg-success px-xxl-3 py-xxl-2 mx-xxl-2 rounded-pill text-dark" id="tracking_status">
 									TRACKING
 								</label>
