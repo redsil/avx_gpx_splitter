@@ -52,11 +52,11 @@ class fs_track:
 
     def close_gpx(self):
         self.__close_gpx = True
+        while self.__close_gpx:
+            sleep(1)
 
     def list_files(self):
-#        return self.completed_gpx
-        # DEBUG
-        files = [ f"tracks/{file}"  for file in os.listdir("tracks")  if not self.gpx_file or self.gpx_file.closed or file != self.gpx_file.name]
+        files = [ f"{self.outdir}/{file}"  for file in os.listdir(self.outdir)  if not self.gpx_file or self.gpx_file.closed or f"{self.outdir}/{file}" != self.gpx_file.name]
 
         return sorted(files)
 
@@ -154,8 +154,9 @@ class fs_track:
 
     def __finish_gpx(self):
         if (not self.gpx_file.closed):
+            self.__finish_segment()
             print(" </trk>",file=self.gpx_file)
-            print("</gpx>",file=self.gpx_filefile)
+            print("</gpx>",file=self.gpx_file,flush=True)
             self.completed_gpx.append(self.gpx_file.name)
             self.gpx_file.close()
             self.wait_for_position = True  # reset waiting state so we can generate a new GPX when a position received
@@ -184,7 +185,7 @@ class fs_track:
                 except OSError as msg:
                     if (self.have_connection == True):
                         print("Connection closed, finalizing GPX file")
-                        self.__finish_gpx(self.gpx_file)
+                        self.__finish_gpx()
                         self.have_connection = False
                     continue
                         
