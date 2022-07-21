@@ -29,10 +29,11 @@
 				}
 				if (d.tracking) {
 					$("#tracking_status").removeClass("bg-danger").addClass("bg-success");
-					$("#current_track").text(d.current_track)
+					$("#current_track").text(d.current_track);
 				} else {
 					$("#tracking_status").removeClass("bg-success").addClass("bg-danger");
-					$("#current_track").text("")
+					$("#current_track").text("");
+					$("#telemetry").text("");
 				}
 				if (d.running) {
 					$("#pause").removeClass("text-danger").addClass("text-success").text("PAUSE");
@@ -85,7 +86,7 @@
 			})
 			.then(res => res.json() )
 			.then(d => {
-				console.log(d);
+//				console.log(d);
 				load_gpx_data(d.gpx_data);
 			})
 			
@@ -266,8 +267,12 @@
 		// Handle server side events for updating tracker state
 		const evtSource = new EventSource("/subscribe");
 		evtSource.onmessage = function(event) {
-			if (event.data == "reload") {
+			data_object = JSON.parse(event.data)
+			if ("status" in data_object) {
 				load_tracker();
+			}
+			if ("position" in data_object) {
+				$("#telemetry").text(`Speed: ${data_object.position.speed}  Track: ${data_object.position.track}`)
 			}
 		}
 
@@ -359,6 +364,7 @@
 							</div>
 							<div class="text-end col-4 bg-body" sf-type="container" sf-label="Column">
 								<h5 id="current_track"></h5>
+								<h5 id="telemetry" class="text-center"></h5>
 							</div>
 							<div class="text-end col-4 bg-body" sf-type="container" sf-label="Column">
 								<label class="bg-success px-xxl-3 py-xxl-2 mx-xxl-2 rounded-pill text-dark" id="tracking_status">

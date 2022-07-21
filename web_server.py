@@ -36,11 +36,14 @@ app = Flask(__name__)
 
 announcer = MessageAnnouncer()
 
+def get_message(data={}):
+    data_str = JSONEncoder().encode(data)
+    event_obj = formated_msg = announcer.format_sse(data=data_str)
+    announcer.announce(event_obj)
+
 # Instance Tracker
-fstracker = fs_track(outdir="tracks",event_update=lambda : announcer.announce(msg=announcer.format_sse(data='reload')))
+fstracker = fs_track(outdir="tracks",event_update=lambda msg="" : get_message(msg))
 fstracker.start_thread()
-
-
 
 
 @app.route("/")

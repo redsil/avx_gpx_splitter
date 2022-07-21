@@ -1,5 +1,4 @@
 #!/usr/bin/python3
-from asyncio import wait_for
 from socket import *
 from datetime import *
 import re
@@ -8,7 +7,6 @@ from time import sleep
 import math
 import time
 import threading
-from itsdangerous import NoneAlgorithm
 import os
 
 
@@ -44,6 +42,11 @@ class fs_track:
         self.have_connection = False
         self.wait_for_position = True # false when actively tracking and creating a segment
         self.__num_segments = 0
+        self.__spd = 0.0
+        self.__trk = 0.0
+
+    def __meters_to_feet(self,meters):
+        return meters * 3.28084 
 
     def is_connected(self):
         return self.have_connection
@@ -122,20 +125,36 @@ class fs_track:
         else:
             return(True)
             
+    def __parse_att(self,data):
+        # XATTMy Sim,180.2,0.1,0.2   heading, pitch, roll
+        hdg,pitch,roll = (None,None,None)
+        fields = data.split(r',')
+        if (re.search(r'ATT',fields[0])):
+            hdg = float(fields[1])
+            pitch = float(fields[2])
+            roll = float(fields[3])
+
+        return(hdg,pitch,roll)
+
+
     def __parse_position(self,data,ts):
+        # https://www.foreflight.com/support/network-gps/
         # "XGPSFlight Events,-83.208471,40.124682,2310.1),58.3,75.1"
         fields = data.split(r',')
-        lat,lon,alt = (None,None,None)
+        lat,lon,alt,trk,spd = (None,None,None,None,None)
         gpx = ""
         # This is position data.  Time is sent with more precision than a GPX can store and this can cause speed fluctuations when
         # rounding errors become high.  We will average this out by taking samples every N seconds
         if (re.search(r'XGPS',fields[0])):
-            
+
             alt = re.sub(r'([\.\d]+).*',r'\1',fields[3])
             alt = float(alt)
 
             lat = float(fields[2])
             lon = float(fields[1])
+
+            trk = float(fields[4])
+            spd = int(float(fields[5]) * 1.94384) # convert m/s to knots
 
             gpx = f'''\t<trkpt lon="{fields[1]}" lat="{fields[2]}">
 \t\t<ele>{alt:.1f}</ele>
@@ -143,14 +162,14 @@ class fs_track:
 \t</trkpt>'''
 
 
-        return(lat,lon,alt,gpx)
+        return(lat,lon,alt,gpx,trk,spd)
 
     def start_thread(self):
         thread = threading.Thread(target=self.__run, args=(),daemon=True)
         thread.start()
         print("Thread Started")
         self.running = True
-        self.event_update()
+        self.event_update({"status":True})
         return(thread)
 
     def __finish_segment(self):
@@ -172,7 +191,7 @@ class fs_track:
             self.gpx_file.close()
             self.wait_for_position = True  # reset waiting state so we can generate a new GPX when a position received
             self.__num_segments = 0
-            self.event_update()
+            self.event_update({"status":True})
         
     def __run(self):
         # create output dir if it doesn't exist
@@ -207,7 +226,12 @@ class fs_track:
                     print("Failed to decode packet, skipping")
                     continue
                         
-                lat,lon,alt,gpx_string = self.__parse_position(data,ts)
+                lat,lon,alt,gpx_string,trk,spd = self.__parse_position(data,ts)
+                hdg,pitch,roll = self.__parse_att(data)
+
+                if (hdg):
+                    self.__hdg = hdg
+
 
                 if (not (lat and lon and alt)):
                     if (time.time() - self.last_pos_time) <= (self.sample_rate * 3):
@@ -231,7 +255,7 @@ class fs_track:
         <gpx xmlns="http://www.topografix.com/GPX/1/1" version="1.1" creator="AVX flight tracker" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
         <trk>
                 """,file=self.gpx_file,flush=True)
-                            self.event_update()
+                            self.event_update({"status":True})
 
                         # Start segment 
                         self.__num_segments = 0
@@ -244,11 +268,13 @@ class fs_track:
                             print("Got invalid position, closing segment and waiting for new position to start a new track segment")
                             self.__finish_segment()
                             self.wait_for_position = True
-                            self.event_update()
+                            self.event_update({"status":True})
 
                         else:
-                            print(gpx_string,file=self.gpx_file,flush=True)
                             self.last_pos_time = time.time()                
+                            self.__spd = spd
+                            self.__trk = trk
+                            self.event_update({'position':{'lat':lat,'lon':lon,'alt':self.__meters_to_feet(alt),'speed':spd,'track':trk}})
 
                     self.last_lat = lat
                     self.last_lon = lon
