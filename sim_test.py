@@ -1,5 +1,4 @@
 #!/usr/bin/python3
-from asyncio import wait_for
 from socket import *
 from datetime import *
 import re
@@ -11,6 +10,11 @@ import threading
 import os
 import gpx_splitter
 import gpxpy
+import geopy.distance
+import math
+import numpy as np
+
+
 
 class test_sim:
     def __init__(self,**args):
@@ -27,20 +31,40 @@ class test_sim:
         
 
 
+    def get_bearing(self,lat1,lon1,lat2,lon2):
+        dLon = lon2 - lon1;
+        y = math.sin(dLon) * math.cos(lat2);
+        x = math.cos(lat1)*math.sin(lat2) - math.sin(lat1)*math.cos(lat2)*math.cos(dLon);
+        brng = np.rad2deg(math.atan2(y, x));
+        if brng < 0: brng+= 360
+        return brng
+
+
     def run(self):
         fd = open(self.gpx_file,mode="r")
         gpx_string = fd.read()
         gpx_data = gpx_splitter.load_gpx(gpx_string)
         fd.close()
 
+        last_point = None
+        speed = 0.0
+        bearing = 0.0
+        
         for point in gpx_data.walk(only_points=True):
             lon = point.longitude
             lat = point.latitude
             alt = point.elevation        
             time = point.time
 
-            print(f"XGPSFlight Events,{lon},{lat},{alt}")          
-            m=self.s.send(f"XGPSFlight Events,{lon},{lat},{alt}".encode(encoding='UTF-8'))
+            if (last_point):
+                dist = geopy.distance.geodesic((last_point.latitude,last_point.longitude),(lat,lon)).mi
+                speed = 3600 * dist / 3
+                bearing = self.get_bearing(last_point.latitude,last_point.longitude,lat,lon)
+
+            last_point = point
+
+            print(f"XGPSFlight Events,{lon},{lat},{alt},{bearing},{speed}")          
+            m=self.s.send(f"XGPSFlight Events,{lon},{lat},{alt},{int(bearing)},{int(speed)}".encode(encoding='UTF-8'))
 
             sleep(3)
                   

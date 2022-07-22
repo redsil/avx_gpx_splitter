@@ -61,6 +61,7 @@ class fs_track:
         self.__close_gpx = True
         while self.__close_gpx:
             sleep(1)
+        self.event_update({"status":True})
 
     def list_files(self):
         files = [ f"{self.outdir}/{file}"  for file in os.listdir(self.outdir)  if not self.gpx_file or self.gpx_file.closed or f"{self.outdir}/{file}" != self.gpx_file.name]
@@ -82,6 +83,7 @@ class fs_track:
     def delete_gpx(self,filename):
         try:
             os.remove(filename)
+            self.event_update({"status":True})
             return True
         except OSError as e:
             print(f"Unable to delete {filename}: {e.strerror}")
@@ -173,11 +175,13 @@ class fs_track:
         return(thread)
 
     def __finish_segment(self):
-        if (not self.gpx_file.closed):
+        self.event_update({"tracking":False})
+        if (not self.gpx_file.closed and not self.wait_for_position):
             print("  </trkseg>",file=self.gpx_file,flush=True)
 
     def __start_segment(self):
         if (not self.gpx_file.closed):
+            self.event_update({"tracking":True})
             self.__num_segments += 1
             print("  <trkseg>",file=self.gpx_file,flush=True)
                         
@@ -274,6 +278,7 @@ class fs_track:
                             self.last_pos_time = time.time()                
                             self.__spd = spd
                             self.__trk = trk
+                            print(gpx_string,file=self.gpx_file,flush=True)
                             self.event_update({'position':{'lat':lat,'lon':lon,'alt':self.__meters_to_feet(alt),'speed':spd,'track':trk}})
 
                     self.last_lat = lat
