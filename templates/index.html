@@ -11,10 +11,9 @@
     <script>
 
 		var gpx_xml = "";
-
-		function load_tracker() {
-			$("#tracks-table-body tr#tracks_row").remove();
-			fetch('/tracker?is_connected&is_tracking&is_running&list_files', {
+		var loading = false
+		function load_state() {
+			fetch('/tracker?is_connected&is_tracking&is_running', {
 				method: 'GET',
 				headers: {
 				'Content-Type': 'application/json'
@@ -40,6 +39,19 @@
 				} else {
 					$("#pause").removeClass("text-success").addClass("text-danger").text("RESUME");
 				}
+			})
+		}
+
+		function show_tracks() {
+			$("#tracks-table-body tr#tracks_row").remove();
+			fetch('/tracker?list_files', {
+				method: 'GET',
+				headers: {
+				'Content-Type': 'application/json'
+				}
+			})
+			.then(res => res.json())
+			.then(d => {
 				if (d.files) {
 					table = $("#tracks-table-body");
 					d.files.sort().forEach(function(file,index) {
@@ -49,9 +61,15 @@
 						row.append($('<td name="col"><button class="btn btn-action-1 mx-xxl-1 rounded-pill bg-primary text-light" onclick="delete_file()">Delete</button></td>'));
 						table.append(row);
 					})
+					loading = false
 				}
-			})
+			});
 
+		}
+
+		function refresh() {
+			show_tracks()
+			load_state()
 		}
 
 		function delete_file() {
@@ -71,7 +89,6 @@
 						alert("Unable to delete")
 					}
 					row.remove();
-					load_tracker();
 				})
 			}
 		}
@@ -101,7 +118,6 @@
 			})
 			.then(res => res.json())
 			.then(d => {
-				load_tracker();
 			})
 		}
 
@@ -114,7 +130,11 @@
 			})
 			.then(res => res.json())
 			.then(d => {
-				load_tracker();
+				if (d.running) {
+					$("#pause").removeClass("text-danger").addClass("text-success").text("PAUSE");
+				} else {
+					$("#pause").removeClass("text-success").addClass("text-danger").text("RESUME");
+				}
 			})
 		}
 
@@ -142,7 +162,7 @@
 			return(d*0.000539957);
 		}
 
-		function clear_table() {
+		function clear_segments() {
 			$("tr#seg_row").remove();
 		}
 
@@ -195,7 +215,7 @@
 		}
 
 		function load_gpx_data(data) {
-			clear_table();
+			clear_segments();
 			show_spinner();
 			fetch('/load', {
 				method: 'POST',
@@ -269,22 +289,27 @@
 		evtSource.onmessage = function(event) {
 			data_object = JSON.parse(event.data)
 			if ("tracking" in data_object) {
-				if (data_object.tracking) {
+				if (data_object.tracking.state) {
 					$("#tracking_status").removeClass("bg-danger").addClass("bg-success");
+					$("#current_track").text(data_object.tracking.current_track);
 				} else {
 					$("#tracking_status").removeClass("bg-success").addClass("bg-danger");
 					$("#telemetry").text("");
+					$("#current_track").text("");
 				}
 			}
 			if ("status" in data_object) {
-				load_tracker();
+				load_state();
+			}
+			if ("tracks" in data_object) {
+				show_tracks();
 			}
 			if ("position" in data_object) {
 				$("#telemetry").text(`Speed: ${data_object.position.speed}  Track: ${data_object.position.track}`)
 			}
 		}
 
-		$().ready(load_tracker)
+		$().ready(refresh)
     </script>
   </head>
   <body>
@@ -360,7 +385,7 @@
 								</div>
 							</div>
 							<div class="col-4" sf-type="container" sf-label="Column">
-								<button href="#" class="btn btn-action-1 mx-xxl-1 rounded-pill bg-primary text-light" sf-type="btn" sf-label="Button" onclick="load_tracker()">
+								<button href="#" class="btn btn-action-1 mx-xxl-1 rounded-pill bg-primary text-light" sf-type="btn" sf-label="Button" onclick="refresh()">
 									Refresh
 								</button>
 								<button href="#" class="btn btn-action-1 mx-xxl-1 rounded-pill bg-primary text-success" sf-type="btn" sf-label="Button" id="pause" onclick="pause_unpause_tracker()">

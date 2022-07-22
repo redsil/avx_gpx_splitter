@@ -36,13 +36,13 @@ app = Flask(__name__)
 
 announcer = MessageAnnouncer()
 
-def get_message(data={}):
+def send_message(data={}):
     data_str = JSONEncoder().encode(data)
     event_obj = formated_msg = announcer.format_sse(data=data_str)
     announcer.announce(event_obj)
 
 # Instance Tracker
-fstracker = fs_track(outdir="tracks",event_update=lambda msg="" : get_message(msg))
+fstracker = fs_track(outdir="tracks",event_update=lambda msg="" : send_message(msg))
 fstracker.start_thread()
 
 
@@ -116,12 +116,16 @@ def tracker():
                     fstracker.disable()
                 else:
                     fstracker.enable()
+                ret_val['running'] = fstracker.is_running()
             if args['command'] == 'flush':
                 fstracker.close_gpx()
+                send_message({"status":True})
+                send_message({"tracks":True})
             if args['command'] == 'delete_gpx':
                 if 'filename' in args:
                     print("deleting ${args['filename']}")
                     ret_val['status']  = fstracker.delete_gpx(args['filename'])
+                    send_message({"status":True})
     return(JSONEncoder().encode(ret_val))
 
 

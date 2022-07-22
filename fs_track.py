@@ -61,7 +61,6 @@ class fs_track:
         self.__close_gpx = True
         while self.__close_gpx:
             sleep(1)
-        self.event_update({"status":True})
 
     def list_files(self):
         files = [ f"{self.outdir}/{file}"  for file in os.listdir(self.outdir)  if not self.gpx_file or self.gpx_file.closed or f"{self.outdir}/{file}" != self.gpx_file.name]
@@ -83,7 +82,6 @@ class fs_track:
     def delete_gpx(self,filename):
         try:
             os.remove(filename)
-            self.event_update({"status":True})
             return True
         except OSError as e:
             print(f"Unable to delete {filename}: {e.strerror}")
@@ -175,19 +173,19 @@ class fs_track:
         return(thread)
 
     def __finish_segment(self):
-        self.event_update({"tracking":False})
-        if (not self.gpx_file.closed and not self.wait_for_position):
+        self.event_update({"tracking":{"state":False}})
+        if (self.gpx_file and not self.gpx_file.closed and not self.wait_for_position):
             print("  </trkseg>",file=self.gpx_file,flush=True)
 
     def __start_segment(self):
         if (not self.gpx_file.closed):
-            self.event_update({"tracking":True})
+            self.event_update({"tracking":{"state":True,"current_track":self.gpx_file.name}})
             self.__num_segments += 1
             print("  <trkseg>",file=self.gpx_file,flush=True)
                         
 
     def __finish_gpx(self):
-        if (not self.gpx_file.closed):
+        if (self.gpx_file and not self.gpx_file.closed):
             self.__finish_segment()
             print(" </trk>",file=self.gpx_file)
             print("</gpx>",file=self.gpx_file,flush=True)
@@ -195,7 +193,9 @@ class fs_track:
             self.gpx_file.close()
             self.wait_for_position = True  # reset waiting state so we can generate a new GPX when a position received
             self.__num_segments = 0
-            self.event_update({"status":True})
+            return True
+        else:
+            return False
         
     def __run(self):
         # create output dir if it doesn't exist
@@ -215,13 +215,16 @@ class fs_track:
                 try:
                     m=self.s.recvfrom(1024)
                     ts = datetime.utcnow()
-                    self.have_connection = True
+                    if (not self.have_connection):
+                        self.have_connection = True
+                        self.event_update({"status":True})
 
                 except OSError as msg:
                     if (self.have_connection == True):
                         print("Connection closed, finalizing GPX file")
                         self.__finish_gpx()
                         self.have_connection = False
+                        self.event_update({"status": True})
                     continue
                         
                 try:
@@ -259,7 +262,7 @@ class fs_track:
         <gpx xmlns="http://www.topografix.com/GPX/1/1" version="1.1" creator="AVX flight tracker" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">
         <trk>
                 """,file=self.gpx_file,flush=True)
-                            self.event_update({"status":True})
+                            self.event_update({"tracking":{"state":True,"current_track":filename}})
 
                         # Start segment 
                         self.__num_segments = 0
@@ -272,7 +275,7 @@ class fs_track:
                             print("Got invalid position, closing segment and waiting for new position to start a new track segment")
                             self.__finish_segment()
                             self.wait_for_position = True
-                            self.event_update({"status":True})
+                            self.event_update({"tracking":{"state":False}})
 
                         else:
                             self.last_pos_time = time.time()                
@@ -284,8 +287,8 @@ class fs_track:
                     self.last_lat = lat
                     self.last_lon = lon
             else:  # not enabled
-                self.__finish_gpx()
-                self.have_connection = False
+                if self.have_connection:
+                    self.have_connection = False
                 sleep(5)
 
     
