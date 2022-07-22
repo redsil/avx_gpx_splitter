@@ -225,6 +225,7 @@ class fs_track:
                         self.__finish_gpx()
                         self.have_connection = False
                         self.event_update({"status": True})
+                        self.event_update({"tracks": True})
                     continue
                         
                 try:
