@@ -12,4 +12,5 @@ RUN git clone https://github.com/redsil/avx_gpx_splitter.git .
 
 CMD ["./web_server.py","5766"]
 EXPOSE 5766
+EXPOSE 49002/udp
 
