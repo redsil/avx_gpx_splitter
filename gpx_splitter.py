@@ -12,7 +12,7 @@ import datetime
 
 from simplejson import JSONEncoder
 
-__IDLE_LIMIT = 300
+__IDLE_LIMIT = 600
 
 def meters_to_nm(meters):
     return meters/1852 
@@ -101,11 +101,18 @@ def split_into_segments(gpx,airports):
             for point_no,point in enumerate(segment.points):
                 if (last_point):
                     if (point.time_difference(last_point) > __IDLE_LIMIT):
-                        print(f'DEBUG: {last_point} {point}')
                         cur_airport = closest_airport(airports,last_point.latitude,last_point.longitude,meters_to_feet(last_point.elevation))
+                        if (last_airport and cur_airport['ident'] == last_airport['ident']):
+                            # Forget the last split if we didn't go anywhere in the time limit
+                            split_points.append([track_no,segment_no,point_no-1])
+                            start = point
+
+
                         if (not last_airport or cur_airport['ident'] != last_airport['ident']):
                             split_points.append([track_no,segment_no,point_no-1])
                             last_airport = closest_airport(airports,point.latitude,point.longitude,meters_to_feet(point.elevation))
+                            start = point
+
 
                 last_point = point
 
