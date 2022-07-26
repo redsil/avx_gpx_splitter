@@ -96,15 +96,14 @@ def split_into_segments(gpx,airports):
             start = segment.points[0]
 
             last_airport = closest_airport(airports,start.latitude,start.longitude,meters_to_feet(start.elevation))
-            if (not last_airport):
-                continue
 
             last_point = None
             for point_no,point in enumerate(segment.points):
                 if (last_point):
                     if (point.time_difference(last_point) > __IDLE_LIMIT):
+                        print(f'DEBUG: {last_point} {point}')
                         cur_airport = closest_airport(airports,last_point.latitude,last_point.longitude,meters_to_feet(last_point.elevation))
-                        if (cur_airport['ident'] != last_airport['ident']):
+                        if (not last_airport or cur_airport['ident'] != last_airport['ident']):
                             split_points.append([track_no,segment_no,point_no-1])
                             last_airport = closest_airport(airports,point.latitude,point.longitude,meters_to_feet(point.elevation))
 
