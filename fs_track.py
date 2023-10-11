@@ -8,7 +8,7 @@ import math
 import time
 import threading
 import os
-
+import geopy.distance
 
 class fs_track:
     def __init__(self,**args):
@@ -242,17 +242,23 @@ class fs_track:
 
 
                 if (not (lat and lon and alt)):
-                    if (time.time() - self.last_pos_time) <= (self.sample_rate * 3):
-                        # Give 3 tries until we give up waiting for position data
+                    if (time.time() - self.last_pos_time) <= (self.sample_rate * 60):
+                        # Give 60 tries until we give up waiting for position data
                         continue
                     
                     # No longer seeing position updates, close segment and wait for new position
                     elif not self.wait_for_position:
-                        print("Closing segment due to not seeing position updates in last 10 seconds")
+                        print("Closing segment due to not seeing position updates in last 180 seconds")
                         self.__finish_segment()
                         self.wait_for_position = True
 
                 else:
+                    if not self.wait_for_position and geopy.distance.geodesic((lat,lon),(self.last_lat,self.last_lon)).mi > 10:
+                        # last position received more than 5 miles from current position, start new segment
+                        print("Closing segment due to position update more than 10 miles from last position")
+                        self.__finish_segment()
+                        self.wait_for_position = True
+                         
                     if self.wait_for_position and self.__is_valid_position(lat,lon,alt):
                         # Create new file if needed
                         if not self.gpx_file or self.gpx_file.closed:
