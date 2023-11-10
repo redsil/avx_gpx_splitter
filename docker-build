@@ -1,3 +1,3 @@
 #!/bin/sh
-docker build --no-cache -t ehjay/avx:beta .
+docker build --compress --force-rm --no-cache -t ehjay/avx:beta .
 
